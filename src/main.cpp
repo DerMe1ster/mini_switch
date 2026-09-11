@@ -15,15 +15,15 @@
 #define delay_addr 0
 uint16_t send_delay;
 
-#define BTN_POWER 0xA
-#define BTN_OK 0xD
+#define BTN_POWER 0x0A
+#define BTN_OK 0x0D
 #define BTN_LEFT 0x10
-#define BTN_VOLUME 0xF
+#define BTN_VOLUME 0x0F
 #define BTN_HOME 0x1A
 #define BTN_BACK 0x40
 #define BTN_PC 0x33
 
-const uint16_t TURN_OFF[] = {BTN_POWER, BTN_LEFT, BTN_OK};
+const uint8_t TURN_OFF[] = {BTN_POWER, BTN_LEFT, BTN_OK};
 
 struct Buttons {
   bool _1;
@@ -39,17 +39,14 @@ void check_receiver() {
   if (IrReceiver.decode()) {
     // Игнорируем флаги повтора зажатой кнопки
     if (!(IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)) {
-        IRData data = IrReceiver.decodedIRData;
-        
-        Serial.print(F("Command receiver: protocol -- "));
-        Serial.print(IrReceiver.getProtocolString());
-        Serial.print(F(" | address -- 0x"));
-        Serial.print(data.address, HEX);
-        Serial.print(F(" | command -- 0x"));
-        Serial.println(data.command, HEX);
-      }
+      // Выводит готовый C-массив сырых микросекунд
+      IrReceiver.printIRResultRawFormatted(&Serial, true);
+    
+      // Также покажет протокол, адрес и команду, если распознает
+      IrReceiver.printIRResultShort(&Serial);
     }
     IrReceiver.resume();
+  }
 }
 
 
@@ -138,15 +135,16 @@ void check_buttons(Buttons& bts) {
 }
 
 
-void send_command(const uint16_t& command) {
+void send_command(const uint8_t& command) {
   IrReceiver.stop();
   IrSender.sendNEC(send_address, command, 0);
-  delay(5);
+  delay(10);
   IrReceiver.start();
+  IrReceiver.resume();
 }
 
 
-void setup() {
+void _setup() {
   init(); //надо, чтобы ардуинка завелась, встроенная функция
   Serial.begin(115200); //инициализия com порта
   IrReceiver.begin(receiver_pin, ENABLE_LED_FEEDBACK);
@@ -169,8 +167,8 @@ void setup() {
 }
 
 int main() {
-  setup();
-  Buttons buttons;
+  _setup();
+  Buttons buttons = {false, false, false, false, false, false};
   uint32_t last_bt_time = millis();
   uint32_t last_ser_time = millis();
   uint32_t last_res_time = millis();
@@ -187,21 +185,18 @@ int main() {
       }
       if(debug) Serial.println(F("Turn_off command has sent"));
       buttons._1_proc = true;
-      IrReceiver.resume();
     }
     
     if(buttons._2 && !buttons._2_proc) {
       send_command(BTN_HOME);
       if(debug) Serial.println(F("Home command has sent"));
       buttons._2_proc = true;
-      IrReceiver.resume();
     }
 
     if(buttons._3 && !buttons._3_proc) {
       send_command(BTN_VOLUME);
       if(debug) Serial.println(F("Volume command has sent"));
       buttons._3_proc = true;
-      IrReceiver.resume();
     }
 
     last_bt_time = millis();
